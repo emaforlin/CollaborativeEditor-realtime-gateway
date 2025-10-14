@@ -3,7 +3,13 @@ package config
 import (
 	"os"
 	"strconv"
+	"sync"
 	"time"
+)
+
+var (
+	singleConfig *Config
+	once         sync.Once
 )
 
 // Config holds all configuration for the application
@@ -39,26 +45,28 @@ type JWTConfig struct {
 
 // Load loads configuration from environment variables with sensible defaults
 func Load() *Config {
-	return &Config{
-		Server: ServerConfig{
-			Port:         getEnv("SERVER_PORT", "9001"),
-			Host:         getEnv("SERVER_HOST", "localhost"),
-			ReadTimeout:  getDuration("SERVER_READ_TIMEOUT", 15*time.Second),
-			WriteTimeout: getDuration("SERVER_WRITE_TIMEOUT", 15*time.Second),
-		},
-		WebSocket: WebSocketConfig{
-			CheckOrigin:       getBool("WS_CHECK_ORIGIN", false),
-			ReadBufferSize:    getInt("WS_READ_BUFFER_SIZE", 1024),
-			WriteBufferSize:   getInt("WS_WRITE_BUFFER_SIZE", 1024),
-			HandshakeTimeout:  getDuration("WS_HANDSHAKE_TIMEOUT", 10*time.Second),
-			EnableCompression: getBool("WS_ENABLE_COMPRESSION", false),
-		},
-		JWT: JWTConfig{
-			SecretKey:     getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-this-in-production"),
-			TokenDuration: getDuration("JWT_TOKEN_DURATION", 24*time.Hour),
-			Issuer:        getEnv("JWT_ISSUER", "collaborative-editor-gateway"),
-		},
-	}
+	once.Do(func() {
+		singleConfig = &Config{
+			Server: ServerConfig{
+				Port:         getEnv("SERVER_PORT", "9001"),
+				Host:         getEnv("SERVER_HOST", "localhost"),
+				ReadTimeout:  getDuration("SERVER_READ_TIMEOUT", 15*time.Second),
+				WriteTimeout: getDuration("SERVER_WRITE_TIMEOUT", 15*time.Second),
+			},
+			WebSocket: WebSocketConfig{
+				CheckOrigin:       getBool("WS_CHECK_ORIGIN", false),
+				ReadBufferSize:    getInt("WS_READ_BUFFER_SIZE", 1024),
+				WriteBufferSize:   getInt("WS_WRITE_BUFFER_SIZE", 1024),
+				HandshakeTimeout:  getDuration("WS_HANDSHAKE_TIMEOUT", 10*time.Second),
+				EnableCompression: getBool("WS_ENABLE_COMPRESSION", false),
+			},
+			JWT: JWTConfig{
+				SecretKey: getEnv("JWT_SECRET", "dev-secret-change-me"),
+				Issuer:    getEnv("JWT_ISSUER", "ce-realtime-gateway"),
+			},
+		}
+	})
+	return singleConfig
 }
 
 // Helper functions for environment variable parsing
