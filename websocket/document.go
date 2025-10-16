@@ -5,12 +5,12 @@ import "log"
 type DocumentHandler struct{}
 
 func (h *DocumentHandler) HandleMessage(conn *Connection, message Message) error {
-	log.Printf("Received: %s", message.Data)
+	log.Printf("Received: %s from %s on %s", message.Data, conn.GetClientID(), conn.GetMetadata("DocumentID").(string))
 	return nil
 }
 
 func (h *DocumentHandler) OnConnect(conn *Connection) error {
-	log.Printf("New document connection: %s", conn.clientID)
+	log.Printf("User %s joined %s", conn.GetClientID(), conn.GetMetadata("DocumentID"))
 	return nil
 }
 
