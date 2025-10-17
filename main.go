@@ -55,8 +55,9 @@ func main() {
 	)
 
 	// Register WebSocket endpoint for document collaboration
-	srv.RegisterHandlerWithMiddleware("/ws/document",
+	srv.RegisterHandlerWithMiddleware("/ws/document/{id}",
 		websocket.HandleWebSocket(upgrader, hub, documentHandler),
+		middleware.AuthJWT,
 		middleware.WebSocketLogger,
 		middleware.Recovery,
 	)

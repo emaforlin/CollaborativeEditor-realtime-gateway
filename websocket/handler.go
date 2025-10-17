@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/emaforlin/ce-realtime-gateway/config"
+	"github.com/emaforlin/ce-realtime-gateway/middleware"
 	"github.com/gorilla/websocket"
 )
 
@@ -127,6 +128,14 @@ func NewUpgrader(cfg *config.Config) websocket.Upgrader {
 // HandleWebSocket creates a WebSocket handler function
 func HandleWebSocket(upgrader websocket.Upgrader, hub *Hub, handler Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		clientId, ok := middleware.GetUserID(r)
+		if !ok || clientId == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		docId := r.PathValue("id")
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Printf("Failed to upgrade connection: %v", err)
@@ -136,11 +145,13 @@ func HandleWebSocket(upgrader websocket.Upgrader, hub *Hub, handler Handler) htt
 		// Create connection wrapper
 		wsConn := &Connection{
 			conn:     conn,
-			clientID: r.RemoteAddr, // Use remote address as default client ID
+			clientID: clientId,
 			metadata: make(map[string]interface{}),
 			send:     make(chan Message, 256),
 			hub:      hub,
 		}
+		wsConn.SetMetadata(config.MetaRemoteAddrKey, r.RemoteAddr)
+		wsConn.SetMetadata(config.MetaDocumentIDKey, docId)
 
 		// Register connection with hub
 		hub.register <- wsConn

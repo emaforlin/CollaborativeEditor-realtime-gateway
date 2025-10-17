@@ -1,16 +1,28 @@
 package websocket
 
-import "log"
+import (
+	"log"
+
+	"github.com/emaforlin/ce-realtime-gateway/config"
+)
 
 type DocumentHandler struct{}
 
 func (h *DocumentHandler) HandleMessage(conn *Connection, message Message) error {
-	log.Printf("Received: %s", message.Data)
+	documentId, ok := conn.GetMetadata(config.MetaDocumentIDKey).(string)
+	if !ok {
+		documentId = ""
+	}
+	log.Printf("Received: %s from %s on %s", message.Data, conn.GetClientID(), documentId)
 	return nil
 }
 
 func (h *DocumentHandler) OnConnect(conn *Connection) error {
-	log.Printf("New document connection: %s", conn.clientID)
+	documentId, ok := conn.GetMetadata(config.MetaDocumentIDKey).(string)
+	if !ok {
+		documentId = ""
+	}
+	log.Printf("User %s joined %s", conn.GetClientID(), documentId)
 	return nil
 }
 
