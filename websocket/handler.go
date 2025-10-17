@@ -128,7 +128,12 @@ func NewUpgrader(cfg *config.Config) websocket.Upgrader {
 // HandleWebSocket creates a WebSocket handler function
 func HandleWebSocket(upgrader websocket.Upgrader, hub *Hub, handler Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		clientId, _ := middleware.GetUserID(r)
+		clientId, ok := middleware.GetUserID(r)
+		if !ok || clientId == "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		docId := r.PathValue("id")
 
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -145,8 +150,8 @@ func HandleWebSocket(upgrader websocket.Upgrader, hub *Hub, handler Handler) htt
 			send:     make(chan Message, 256),
 			hub:      hub,
 		}
-		wsConn.SetMetadata("RemoteAddr", r.RemoteAddr)
-		wsConn.SetMetadata("DocumentID", docId)
+		wsConn.SetMetadata(config.MetaRemoteAddrKey, r.RemoteAddr)
+		wsConn.SetMetadata(config.MetaDocumentIDKey, docId)
 
 		// Register connection with hub
 		hub.register <- wsConn
