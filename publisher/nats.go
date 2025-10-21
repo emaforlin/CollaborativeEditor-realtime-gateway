@@ -26,7 +26,7 @@ func (n *NATSPublisher) PublishDocumentEvent(event DocumentEvent) error {
 		return fmt.Errorf("failed to marshal event: %w", err)
 	}
 
-	subject := fmt.Sprintf("documents.%s.events.%s", event.DocumentID, event.Payload.Action)
+	subject := fmt.Sprintf("documents.%s.%s", event.DocumentID, event.Payload.Action)
 
 	if err := n.client.Publish(subject, data); err != nil {
 		return fmt.Errorf("failed to publish to NATS: %w", err)
