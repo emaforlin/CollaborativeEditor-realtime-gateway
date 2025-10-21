@@ -20,9 +20,10 @@ const (
 )
 
 // Message represents a WebSocket message
-type Message struct {
-	Type MessageType `json:"type"`
-	Data []byte      `json:"data"`
+type DocumentMessage struct {
+	Type       MessageType `json:"type"`
+	DocumentID string      `json:"document_id"`
+	Data       []byte      `json:"data"`
 }
 
 // Connection wraps a WebSocket connection with additional functionality
@@ -30,7 +31,7 @@ type Connection struct {
 	conn     *websocket.Conn
 	clientID string
 	metadata map[string]interface{}
-	send     chan Message
+	send     chan DocumentMessage
 	hub      *Hub
 }
 
@@ -39,12 +40,12 @@ type Hub struct {
 	connections map[string]*Connection
 	register    chan *Connection
 	unregister  chan *Connection
-	broadcast   chan Message
+	broadcast   chan DocumentMessage
 }
 
 // Handler represents a WebSocket message handler
 type Handler interface {
-	HandleMessage(conn *Connection, message Message) error
+	HandleMessage(conn *Connection, message DocumentMessage) error
 	OnConnect(conn *Connection) error
 	OnDisconnect(conn *Connection) error
 }
@@ -55,7 +56,7 @@ func NewHub() *Hub {
 		connections: make(map[string]*Connection),
 		register:    make(chan *Connection),
 		unregister:  make(chan *Connection),
-		broadcast:   make(chan Message),
+		broadcast:   make(chan DocumentMessage),
 	}
 }
 
@@ -88,7 +89,7 @@ func (h *Hub) Run() {
 }
 
 // SendMessage sends a message to a specific connection
-func (c *Connection) SendMessage(message Message) error {
+func (c *Connection) SendMessage(message DocumentMessage) error {
 	select {
 	case c.send <- message:
 		return nil
@@ -147,7 +148,7 @@ func HandleWebSocket(upgrader websocket.Upgrader, hub *Hub, handler Handler) htt
 			conn:     conn,
 			clientID: clientId,
 			metadata: make(map[string]interface{}),
-			send:     make(chan Message, 256),
+			send:     make(chan DocumentMessage, 256),
 			hub:      hub,
 		}
 		wsConn.SetMetadata(config.MetaRemoteAddrKey, r.RemoteAddr)
@@ -185,7 +186,7 @@ func (c *Connection) readPump(handler Handler) {
 			break
 		}
 
-		message := Message{
+		message := DocumentMessage{
 			Type: MessageType(messageType),
 			Data: data,
 		}

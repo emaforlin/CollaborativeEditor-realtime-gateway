@@ -6,7 +6,7 @@ import "log"
 type EchoHandler struct{}
 
 // HandleMessage echoes the received message back to the sender
-func (h *EchoHandler) HandleMessage(conn *Connection, message Message) error {
+func (h *EchoHandler) HandleMessage(conn *Connection, message DocumentMessage) error {
 	log.Printf("Echoing message from %s: %s", conn.clientID, string(message.Data))
 	return conn.SendMessage(message)
 }

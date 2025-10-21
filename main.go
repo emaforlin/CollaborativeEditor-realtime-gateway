@@ -6,6 +6,7 @@ import (
 	"github.com/emaforlin/ce-realtime-gateway/config"
 	"github.com/emaforlin/ce-realtime-gateway/handlers"
 	"github.com/emaforlin/ce-realtime-gateway/middleware"
+	"github.com/emaforlin/ce-realtime-gateway/publisher"
 	"github.com/emaforlin/ce-realtime-gateway/server"
 	"github.com/emaforlin/ce-realtime-gateway/websocket"
 )
@@ -26,7 +27,14 @@ func main() {
 	// Create WebSocket upgrader and handler
 	upgrader := websocket.NewUpgrader(cfg)
 	echoHandler := &websocket.EchoHandler{}
-	documentHandler := &websocket.DocumentHandler{}
+
+	// Initialize the publisher
+	publisher, err := publisher.NewNATSPublisher(cfg.NATS.URL)
+	if err != nil {
+		log.Fatalf("failed to create publisher: %v", err)
+	}
+
+	documentHandler := websocket.NewDocumentHandler(publisher) //&websocket.DocumentHandler{}
 
 	// Create HTTP handlers
 	healthHandler := handlers.NewHealthHandler(version)
