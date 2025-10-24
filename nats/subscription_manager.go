@@ -39,14 +39,13 @@ func (sm *SubscriptionManager) Subscribe(documentID string, messageHandler func(
 
 	docSub, exists := sm.subscriptions[documentID]
 	if !exists {
-		// Crear nueva suscripción
+		// Create new subscription
 		subject := fmt.Sprintf("document.%s.edit", documentID)
 
-		// Handler que procesa mensajes NATS
+		// Handler that processes NATS messages
 		natsHandler := func(msg *nats.Msg) {
 			log.Printf("📥 Received NATS message for document %s on subject %s", documentID, msg.Subject)
 
-			// Llamar al handler personalizado
 			if messageHandler != nil {
 				messageHandler(documentID, msg.Data)
 			}
@@ -67,7 +66,6 @@ func (sm *SubscriptionManager) Subscribe(documentID string, messageHandler func(
 		log.Printf("✅ Created NATS subscription for document: %s (subject: %s)", documentID, subject)
 	}
 
-	// Incrementar contador de conexiones
 	docSub.mutex.Lock()
 	docSub.connectionCount++
 	count := docSub.connectionCount
@@ -77,14 +75,14 @@ func (sm *SubscriptionManager) Subscribe(documentID string, messageHandler func(
 	return nil
 }
 
-// Unsubscribe se desuscribe del subject NATS de un documento
+// Unsubscribe unsubscribes from the NATS subject of a document
 func (sm *SubscriptionManager) Unsubscribe(documentID string) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
 	docSub, exists := sm.subscriptions[documentID]
 	if !exists {
-		return nil // Ya está desuscrito
+		return nil
 	}
 
 	docSub.mutex.Lock()
@@ -94,7 +92,7 @@ func (sm *SubscriptionManager) Unsubscribe(documentID string) error {
 
 	log.Printf("👋 User unsubscribed from document %s (remaining connections: %d)", documentID, count)
 
-	// Si no hay más conexiones, remover suscripción
+	// If no more connections, remove subscription
 	if count <= 0 {
 		if err := docSub.subscription.Unsubscribe(); err != nil {
 			log.Printf("❌ Error unsubscribing from document %s: %v", documentID, err)
@@ -106,14 +104,14 @@ func (sm *SubscriptionManager) Unsubscribe(documentID string) error {
 	return nil
 }
 
-// GetActiveSubscriptions retorna el número de suscripciones activas
+// GetActiveSubscriptions returns the number of active subscriptions
 func (sm *SubscriptionManager) GetActiveSubscriptions() int {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
 	return len(sm.subscriptions)
 }
 
-// GetDocumentConnectionCount retorna el número de conexiones para un documento
+// GetDocumentConnectionCount returns the number of connections for a document
 func (sm *SubscriptionManager) GetDocumentConnectionCount(documentID string) int {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
@@ -127,7 +125,7 @@ func (sm *SubscriptionManager) GetDocumentConnectionCount(documentID string) int
 	return 0
 }
 
-// Close cierra todas las suscripciones
+// Close closes all subscriptions
 func (sm *SubscriptionManager) Close() {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()

@@ -97,7 +97,7 @@ func (h *DocumentHandler) OnDisconnect(conn *Connection) error {
 	return nil
 }
 
-// createNATSHandler creates a NATS message handler of an specific document
+// createNATSHandler creates a NATS message handler for a specific document
 func (h *DocumentHandler) createNATSHandler(documentID string) func(*natsPkg.Msg) {
 	return func(msg *natsPkg.Msg) {
 		log.Printf("📥 Received NATS message for document %s on subject %s", documentID, msg.Subject)
