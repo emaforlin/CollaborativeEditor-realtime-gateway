@@ -24,7 +24,7 @@ type DocumentSubscription struct {
 	messageHandler  func(documentID string, data []byte)
 }
 
-// NewSubscriptionManager crea un nuevo manager de suscripciones
+// NewSubscriptionManager creates a new subscription manager
 func NewSubscriptionManager(conn *nats.Conn) *SubscriptionManager {
 	return &SubscriptionManager{
 		conn:          conn,
