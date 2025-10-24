@@ -15,7 +15,7 @@ type SubscriptionManager struct {
 	mutex         sync.RWMutex
 }
 
-// DocumentSubscription representa una suscripción a un documento específico
+// DocumentSubscription represents a subscription to a specific document
 type DocumentSubscription struct {
 	documentID      string
 	subscription    *nats.Subscription
