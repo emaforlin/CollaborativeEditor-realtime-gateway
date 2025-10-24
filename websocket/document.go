@@ -87,7 +87,7 @@ func (h *DocumentHandler) OnDisconnect(conn *Connection) error {
 
 	log.Printf("👋 User %s leaving document %s", conn.GetClientID(), documentID)
 
-	// Desuscribirse dinámicamente del subject NATS del documento
+	// Dynamically unsubscribe from the document's NATS subject
 	err := h.natsManager.Unsubscribe(documentID)
 	if err != nil {
 		log.Printf("❌ Failed to unsubscribe from NATS for document %s: %v", documentID, err)
