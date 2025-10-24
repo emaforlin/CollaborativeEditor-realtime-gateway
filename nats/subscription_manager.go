@@ -32,7 +32,7 @@ func NewSubscriptionManager(conn *nats.Conn) *SubscriptionManager {
 	}
 }
 
-// Subscribe se suscribe al subject NATS de un documento
+// Subscribe subscribes to a document's NATS subject
 func (sm *SubscriptionManager) Subscribe(documentID string, messageHandler func(string, []byte)) error {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
