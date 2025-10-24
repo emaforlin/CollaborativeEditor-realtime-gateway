@@ -20,9 +20,10 @@ const (
 )
 
 // Message represents a WebSocket message
-type Message struct {
-	Type MessageType `json:"type"`
-	Data []byte      `json:"data"`
+type DocumentMessage struct {
+	Type       MessageType `json:"type"`
+	DocumentID string      `json:"document_id"`
+	Data       []byte      `json:"data"`
 }
 
 // Connection wraps a WebSocket connection with additional functionality
@@ -30,7 +31,7 @@ type Connection struct {
 	conn     *websocket.Conn
 	clientID string
 	metadata map[string]interface{}
-	send     chan Message
+	send     chan DocumentMessage
 	hub      *Hub
 }
 
@@ -39,12 +40,12 @@ type Hub struct {
 	connections map[string]*Connection
 	register    chan *Connection
 	unregister  chan *Connection
-	broadcast   chan Message
+	broadcast   chan DocumentMessage
 }
 
 // Handler represents a WebSocket message handler
 type Handler interface {
-	HandleMessage(conn *Connection, message Message) error
+	HandleMessage(conn *Connection, message DocumentMessage) error
 	OnConnect(conn *Connection) error
 	OnDisconnect(conn *Connection) error
 }
@@ -55,7 +56,7 @@ func NewHub() *Hub {
 		connections: make(map[string]*Connection),
 		register:    make(chan *Connection),
 		unregister:  make(chan *Connection),
-		broadcast:   make(chan Message),
+		broadcast:   make(chan DocumentMessage),
 	}
 }
 
@@ -65,13 +66,15 @@ func (h *Hub) Run() {
 		select {
 		case conn := <-h.register:
 			h.connections[conn.clientID] = conn
-			log.Printf("Connection registered: %s", conn.clientID)
+			docID := conn.GetMetadata(config.MetaDocumentIDKey)
+			log.Printf("Connection registered: %s (Document: %v)", conn.clientID, docID)
 
 		case conn := <-h.unregister:
 			if _, ok := h.connections[conn.clientID]; ok {
 				delete(h.connections, conn.clientID)
 				close(conn.send)
-				log.Printf("Connection unregistered: %s", conn.clientID)
+				docID := conn.GetMetadata(config.MetaDocumentIDKey)
+				log.Printf("Connection unregistered: %s (Document: %v)", conn.clientID, docID)
 			}
 
 		case message := <-h.broadcast:
@@ -87,8 +90,50 @@ func (h *Hub) Run() {
 	}
 }
 
+// BroadcastToDocument sends a message to all the connections on a specific document
+func (h *Hub) BroadcastToDocument(documentID string, data []byte, excludeClientID ...string) {
+	count := 0
+	log.Printf("🔍 Broadcasting to document: %s", documentID)
+	log.Printf("🔍 Total connections: %d", len(h.connections))
+
+	excludeID := ""
+	if len(excludeClientID) > 0 {
+		excludeID = excludeClientID[0]
+	}
+
+	for _, conn := range h.connections {
+
+		// Verify if the connection belongs to the document
+		connDocID, ok := conn.GetMetadata(config.MetaDocumentIDKey).(string)
+		log.Printf("🔍 Connection %s has document ID: %v (type: %T)", conn.clientID, connDocID, conn.GetMetadata(config.MetaDocumentIDKey))
+
+		if ok && connDocID == documentID {
+			if excludeID != "" && conn.clientID == excludeID {
+				continue
+			}
+
+			select {
+			case conn.send <- DocumentMessage{
+				Type: TextMessage,
+				Data: data,
+			}:
+				count++
+				log.Printf("✅ Sent message to connection %s", conn.clientID)
+			default:
+				// Locked connection, close it
+				delete(h.connections, conn.clientID)
+				close(conn.send)
+				log.Printf("❌ Closed blocked connection: %s", conn.clientID)
+			}
+		} else {
+			log.Printf("❌ Connection %s doesn't match document %s (has: %s)", conn.clientID, documentID, connDocID)
+		}
+	}
+	log.Printf("📡 Broadcasted message to %d connections in document %s", count, documentID)
+}
+
 // SendMessage sends a message to a specific connection
-func (c *Connection) SendMessage(message Message) error {
+func (c *Connection) SendMessage(message DocumentMessage) error {
 	select {
 	case c.send <- message:
 		return nil
@@ -147,7 +192,7 @@ func HandleWebSocket(upgrader websocket.Upgrader, hub *Hub, handler Handler) htt
 			conn:     conn,
 			clientID: clientId,
 			metadata: make(map[string]interface{}),
-			send:     make(chan Message, 256),
+			send:     make(chan DocumentMessage, 256),
 			hub:      hub,
 		}
 		wsConn.SetMetadata(config.MetaRemoteAddrKey, r.RemoteAddr)
@@ -185,7 +230,7 @@ func (c *Connection) readPump(handler Handler) {
 			break
 		}
 
-		message := Message{
+		message := DocumentMessage{
 			Type: MessageType(messageType),
 			Data: data,
 		}

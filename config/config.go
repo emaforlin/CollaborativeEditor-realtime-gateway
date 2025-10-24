@@ -17,6 +17,12 @@ type Config struct {
 	Server    ServerConfig
 	WebSocket WebSocketConfig
 	JWT       JWTConfig
+	NATS      NATSConfig
+}
+
+type NATSConfig struct {
+	URL     string
+	Timeout time.Duration
 }
 
 // ServerConfig holds HTTP server configuration
@@ -61,8 +67,11 @@ func Load() *Config {
 				EnableCompression: getBool("WS_ENABLE_COMPRESSION", false),
 			},
 			JWT: JWTConfig{
-				SecretKey: getEnv("JWT_SECRET", "dev-secret-change-me"),
+				SecretKey: getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-this-in-production"),
 				Issuer:    getEnv("JWT_ISSUER", "ce-realtime-gateway"),
+			},
+			NATS: NATSConfig{
+				URL: getEnv("NATS_URL", "nats://localhost:4222"),
 			},
 		}
 	})
