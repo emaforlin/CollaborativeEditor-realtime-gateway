@@ -66,13 +66,15 @@ func (h *Hub) Run() {
 		select {
 		case conn := <-h.register:
 			h.connections[conn.clientID] = conn
-			log.Printf("Connection registered: %s", conn.clientID)
+			docID := conn.GetMetadata(config.MetaDocumentIDKey)
+			log.Printf("Connection registered: %s (Document: %v)", conn.clientID, docID)
 
 		case conn := <-h.unregister:
 			if _, ok := h.connections[conn.clientID]; ok {
 				delete(h.connections, conn.clientID)
 				close(conn.send)
-				log.Printf("Connection unregistered: %s", conn.clientID)
+				docID := conn.GetMetadata(config.MetaDocumentIDKey)
+				log.Printf("Connection unregistered: %s (Document: %v)", conn.clientID, docID)
 			}
 
 		case message := <-h.broadcast:
@@ -86,6 +88,48 @@ func (h *Hub) Run() {
 			}
 		}
 	}
+}
+
+// BroadcastToDocument sends a message to all the connections on a specific document
+func (h *Hub) BroadcastToDocument(documentID string, data []byte, excludeClientID ...string) {
+	count := 0
+	log.Printf("🔍 Broadcasting to document: %s", documentID)
+	log.Printf("🔍 Total connections: %d", len(h.connections))
+
+	excludeID := ""
+	if len(excludeClientID) > 0 {
+		excludeID = excludeClientID[0]
+	}
+
+	for _, conn := range h.connections {
+
+		// Verify if the connection belongs to the document
+		connDocID, ok := conn.GetMetadata(config.MetaDocumentIDKey).(string)
+		log.Printf("🔍 Connection %s has document ID: %v (type: %T)", conn.clientID, connDocID, conn.GetMetadata(config.MetaDocumentIDKey))
+
+		if ok && connDocID == documentID {
+			if excludeID != "" && conn.clientID == excludeID {
+				continue
+			}
+
+			select {
+			case conn.send <- DocumentMessage{
+				Type: TextMessage,
+				Data: data,
+			}:
+				count++
+				log.Printf("✅ Sent message to connection %s", conn.clientID)
+			default:
+				// Locked connection, close it
+				delete(h.connections, conn.clientID)
+				close(conn.send)
+				log.Printf("❌ Closed blocked connection: %s", conn.clientID)
+			}
+		} else {
+			log.Printf("❌ Connection %s doesn't match document %s (has: %s)", conn.clientID, documentID, connDocID)
+		}
+	}
+	log.Printf("📡 Broadcasted message to %d connections in document %s", count, documentID)
 }
 
 // SendMessage sends a message to a specific connection

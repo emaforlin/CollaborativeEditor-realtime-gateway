@@ -6,16 +6,20 @@ import (
 	"time"
 
 	"github.com/emaforlin/ce-realtime-gateway/config"
+	"github.com/emaforlin/ce-realtime-gateway/nats"
 	"github.com/emaforlin/ce-realtime-gateway/publisher"
+	natsPkg "github.com/nats-io/nats.go"
 )
 
 type DocumentHandler struct {
-	broker publisher.Publisher
+	natsManager *nats.Manager
+	hub         *Hub
 }
 
-func NewDocumentHandler(pub publisher.Publisher) *DocumentHandler {
+func NewDocumentHandler(natsManager *nats.Manager, hub *Hub) *DocumentHandler {
 	return &DocumentHandler{
-		broker: pub,
+		natsManager: natsManager,
+		hub:         hub,
 	}
 }
 
@@ -43,7 +47,7 @@ func (h *DocumentHandler) HandleMessage(conn *Connection, message DocumentMessag
 	}
 
 	go func() {
-		if err := h.broker.PublishDocumentEvent(event); err != nil {
+		if err := h.natsManager.PublishDocumentEvent(event); err != nil {
 			log.Printf("Failed to publish document event: %v", err)
 		}
 	}()
@@ -55,15 +59,61 @@ func (h *DocumentHandler) HandleMessage(conn *Connection, message DocumentMessag
 }
 
 func (h *DocumentHandler) OnConnect(conn *Connection) error {
-	documentId, ok := conn.GetMetadata(config.MetaDocumentIDKey).(string)
+	documentID, ok := conn.GetMetadata(config.MetaDocumentIDKey).(string)
 	if !ok {
-		documentId = ""
+		log.Printf("⚠️ No document ID found in connection metadata for user %s", conn.GetClientID())
+		return nil
 	}
-	log.Printf("User %s joined %s", conn.GetClientID(), documentId)
+
+	log.Printf("🔗 User %s joining document %s", conn.GetClientID(), documentID)
+
+	// Dynamically subscribe to the document's NATS subject
+	err := h.natsManager.Subscribe(documentID, h.createNATSHandler(documentID))
+	if err != nil {
+		log.Printf("❌ Failed to subscribe to NATS for document %s: %v", documentID, err)
+		return err
+	}
+
+	log.Printf("✅ User %s successfully joined document %s", conn.GetClientID(), documentID)
 	return nil
 }
 
 func (h *DocumentHandler) OnDisconnect(conn *Connection) error {
-	log.Printf("Document connection closed: %s", conn.clientID)
+	documentID, ok := conn.GetMetadata(config.MetaDocumentIDKey).(string)
+	if !ok {
+		log.Printf("⚠️ No document ID found in connection metadata for user %s", conn.GetClientID())
+		return nil
+	}
+
+	log.Printf("👋 User %s leaving document %s", conn.GetClientID(), documentID)
+
+	// Desuscribirse dinámicamente del subject NATS del documento
+	err := h.natsManager.Unsubscribe(documentID)
+	if err != nil {
+		log.Printf("❌ Failed to unsubscribe from NATS for document %s: %v", documentID, err)
+	}
+
+	log.Printf("🚪 Document connection closed: %s from document %s", conn.clientID, documentID)
 	return nil
+}
+
+// createNATSHandler creates a NATS message handler of an specific document
+func (h *DocumentHandler) createNATSHandler(documentID string) func(*natsPkg.Msg) {
+	return func(msg *natsPkg.Msg) {
+		log.Printf("📥 Received NATS message for document %s on subject %s", documentID, msg.Subject)
+
+		// Parse the NATS message to extract the original sender
+		var event publisher.DocumentEvent
+		if err := json.Unmarshal(msg.Data, &event); err != nil {
+			// Fallback: broadcast without exclusion
+			h.hub.BroadcastToDocument(documentID, msg.Data)
+			return
+		}
+
+		originalSenderID := event.UserID
+
+		h.hub.BroadcastToDocument(documentID, msg.Data, originalSenderID)
+
+		log.Printf("📡 Forwarded NATS message to WebSocket clients in document %s (excluded sender: %s)", documentID, originalSenderID)
+	}
 }
