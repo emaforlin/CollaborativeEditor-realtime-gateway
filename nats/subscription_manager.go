@@ -8,7 +8,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// SubscriptionManager maneja las suscripciones dinámicas a NATS por documento
+// SubscriptionManager handles dynamic NATS subscriptions per document
 type SubscriptionManager struct {
 	conn          *nats.Conn
 	subscriptions map[string]*DocumentSubscription
