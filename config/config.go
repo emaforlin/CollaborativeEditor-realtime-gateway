@@ -56,8 +56,8 @@ func Load() *Config {
 			Server: ServerConfig{
 				Port:         getEnv("SERVER_PORT", "9001"),
 				Host:         getEnv("SERVER_HOST", "localhost"),
-				ReadTimeout:  getDuration("SERVER_READ_TIMEOUT", 15*time.Second),
-				WriteTimeout: getDuration("SERVER_WRITE_TIMEOUT", 15*time.Second),
+				ReadTimeout:  getDuration("SERVER_READ_TIMEOUT", 5*time.Second),
+				WriteTimeout: getDuration("SERVER_WRITE_TIMEOUT", 2*time.Second),
 			},
 			WebSocket: WebSocketConfig{
 				CheckOrigin:       getBool("WS_CHECK_ORIGIN", false),
