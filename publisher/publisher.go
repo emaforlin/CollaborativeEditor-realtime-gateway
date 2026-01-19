@@ -1,6 +1,6 @@
 package publisher
 
 type Publisher interface {
-	PublishDocumentEvent(event DocumentEvent) error
+	PublishDocumentEvent(event WebsocketMessagePayload) error
 	Close()
 }

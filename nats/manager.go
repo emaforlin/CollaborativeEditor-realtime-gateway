@@ -41,7 +41,7 @@ func NewManager(natsURL string) (*Manager, error) {
 }
 
 // PublishDocumentEvent publishes a document event (Publisher functionality)
-func (m *Manager) PublishDocumentEvent(event publisher.DocumentEvent) error {
+func (m *Manager) PublishDocumentEvent(event publisher.WebsocketMessagePayload) error {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal event: %w", err)
@@ -49,12 +49,12 @@ func (m *Manager) PublishDocumentEvent(event publisher.DocumentEvent) error {
 
 	// Use the same subject pattern for consistency
 	subject := fmt.Sprintf("document.%s.edit", event.DocumentID)
-
+	fmt.Println("Published to subject: ", subject)
 	if err := m.conn.Publish(subject, data); err != nil {
 		return fmt.Errorf("failed to publish to NATS: %w", err)
 	}
 
-	log.Printf("Published event to NATS: %s -> %s", subject, event.Payload.Action)
+	log.Printf("Published event to NATS: %s -> %s", subject, event.Type)
 	return nil
 }
 

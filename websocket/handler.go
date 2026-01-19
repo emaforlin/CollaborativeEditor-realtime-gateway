@@ -20,10 +20,10 @@ const (
 )
 
 // Message represents a WebSocket message
-type DocumentMessage struct {
-	Type       MessageType `json:"type"`
-	DocumentID string      `json:"document_id"`
-	Data       []byte      `json:"data"`
+type WebsocketMessage struct {
+	MessageType MessageType `json:"message_type"`
+	DocumentID  string      `json:"document_id"`
+	Data        []byte      `json:"data"`
 }
 
 // Connection wraps a WebSocket connection with additional functionality
@@ -31,7 +31,7 @@ type Connection struct {
 	conn     *websocket.Conn
 	clientID string
 	metadata map[string]interface{}
-	send     chan DocumentMessage
+	send     chan WebsocketMessage
 	hub      *Hub
 }
 
@@ -40,12 +40,12 @@ type Hub struct {
 	connections map[string]*Connection
 	register    chan *Connection
 	unregister  chan *Connection
-	broadcast   chan DocumentMessage
+	broadcast   chan WebsocketMessage
 }
 
 // Handler represents a WebSocket message handler
 type Handler interface {
-	HandleMessage(conn *Connection, message DocumentMessage) error
+	HandleMessage(conn *Connection, message WebsocketMessage) error
 	OnConnect(conn *Connection) error
 	OnDisconnect(conn *Connection) error
 }
@@ -56,7 +56,7 @@ func NewHub() *Hub {
 		connections: make(map[string]*Connection),
 		register:    make(chan *Connection),
 		unregister:  make(chan *Connection),
-		broadcast:   make(chan DocumentMessage),
+		broadcast:   make(chan WebsocketMessage),
 	}
 }
 
@@ -113,9 +113,9 @@ func (h *Hub) BroadcastToDocument(documentID string, data []byte, excludeClientI
 			}
 
 			select {
-			case conn.send <- DocumentMessage{
-				Type: TextMessage,
-				Data: data,
+			case conn.send <- WebsocketMessage{
+				MessageType: TextMessage,
+				Data:        data,
 			}:
 				count++
 				log.Printf("✅ Sent message to connection %s", conn.clientID)
@@ -132,8 +132,54 @@ func (h *Hub) BroadcastToDocument(documentID string, data []byte, excludeClientI
 	log.Printf("📡 Broadcasted message to %d connections in document %s", count, documentID)
 }
 
-// SendMessage sends a message to a specific connection
-func (c *Connection) SendMessage(message DocumentMessage) error {
+// SendToClient sends a message to a specific client by their client ID
+func (h *Hub) SendToClient(clientID string, data []byte) bool {
+	conn, exists := h.connections[clientID]
+	if !exists {
+		log.Printf("❌ Client %s not found", clientID)
+		return false
+	}
+
+	select {
+	case conn.send <- WebsocketMessage{
+		MessageType: TextMessage,
+		Data:        data,
+	}:
+		log.Printf("✅ Sent message to client %s", clientID)
+		return true
+	default:
+		// Connection is blocked, remove it
+		delete(h.connections, clientID)
+		close(conn.send)
+		log.Printf("❌ Closed blocked connection: %s", clientID)
+		return false
+	}
+}
+
+// GetFirstDocumentConnection returns the first available connection for a document, excluding a specific client
+func (h *Hub) GetFirstDocumentConnection(documentID string, excludeClientID string) *Connection {
+	for _, conn := range h.connections {
+		connDocID, ok := conn.GetMetadata(config.MetaDocumentIDKey).(string)
+		if ok && connDocID == documentID && conn.clientID != excludeClientID {
+			return conn
+		}
+	}
+	return nil
+}
+
+// GetDocumentConnectionCount returns the number of connections for a specific document
+func (h *Hub) GetDocumentConnectionCount(documentID string) int {
+	count := 0
+	for _, conn := range h.connections {
+		connDocID, ok := conn.GetMetadata(config.MetaDocumentIDKey).(string)
+		if ok && connDocID == documentID {
+			count++
+		}
+	}
+	return count
+}
+
+func (c *Connection) SendMessage(message WebsocketMessage) error {
 	select {
 	case c.send <- message:
 		return nil
@@ -173,7 +219,7 @@ func NewUpgrader(cfg *config.Config) websocket.Upgrader {
 // HandleWebSocket creates a WebSocket handler function
 func HandleWebSocket(upgrader websocket.Upgrader, hub *Hub, handler Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		clientId, ok := middleware.GetUserID(r)
+		clientId, ok := middleware.GetClientID(r)
 		if !ok || clientId == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -192,11 +238,12 @@ func HandleWebSocket(upgrader websocket.Upgrader, hub *Hub, handler Handler) htt
 			conn:     conn,
 			clientID: clientId,
 			metadata: make(map[string]interface{}),
-			send:     make(chan DocumentMessage, 256),
+			send:     make(chan WebsocketMessage, 256),
 			hub:      hub,
 		}
 		wsConn.SetMetadata(config.MetaRemoteAddrKey, r.RemoteAddr)
 		wsConn.SetMetadata(config.MetaDocumentIDKey, docId)
+		wsConn.SetMetadata(config.MetaClientIDKey, clientId)
 
 		// Register connection with hub
 		hub.register <- wsConn
@@ -230,9 +277,10 @@ func (c *Connection) readPump(handler Handler) {
 			break
 		}
 
-		message := DocumentMessage{
-			Type: MessageType(messageType),
-			Data: data,
+		message := WebsocketMessage{
+			MessageType: MessageType(messageType),
+			DocumentID:  c.GetMetadata(config.MetaDocumentIDKey).(string),
+			Data:        data,
 		}
 
 		if err := handler.HandleMessage(c, message); err != nil {
@@ -246,7 +294,7 @@ func (c *Connection) writePump() {
 	defer c.conn.Close()
 
 	for message := range c.send {
-		if err := c.conn.WriteMessage(int(message.Type), message.Data); err != nil {
+		if err := c.conn.WriteMessage(int(message.MessageType), message.Data); err != nil {
 			log.Printf("Write error: %v", err)
 			return
 		}

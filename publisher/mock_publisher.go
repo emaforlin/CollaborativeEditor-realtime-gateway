@@ -10,7 +10,7 @@ func (m *MockEventPublisher) Close() {
 }
 
 // PublishDocumentEvent implements Publisher.
-func (m *MockEventPublisher) PublishDocumentEvent(event DocumentEvent) error {
+func (m *MockEventPublisher) PublishDocumentEvent(event WebsocketMessagePayload) error {
 	log.Printf("Publish: %+v", event)
 	return nil
 }

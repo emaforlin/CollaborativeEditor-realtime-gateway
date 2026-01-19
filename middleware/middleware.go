@@ -17,14 +17,14 @@ import (
 type contextKey string
 
 const (
-	UserIDKey contextKey = "userID"
-	IssuerKey contextKey = "issuer"
+	IssuerKey   contextKey = "issuer"
+	ClientIDKey contextKey = "clientID"
 )
 
-// GetUserID extracts the user ID from the request context
-func GetUserID(r *http.Request) (string, bool) {
-	userID, ok := r.Context().Value(UserIDKey).(string)
-	return userID, ok
+// GetClientID extracts the client ID from the request context
+func GetClientID(r *http.Request) (string, bool) {
+	clientID, ok := r.Context().Value(ClientIDKey).(string)
+	return clientID, ok
 }
 
 // GetIssuer extracts the issuer from the request context
@@ -69,7 +69,7 @@ func AuthJWT(next http.HandlerFunc) http.HandlerFunc {
 
 			// Store user info in request context for downstream handlers
 			ctx := r.Context()
-			ctx = context.WithValue(ctx, UserIDKey, sub)
+			ctx = context.WithValue(ctx, ClientIDKey, sub)
 			if claims.Issuer != "" {
 				ctx = context.WithValue(ctx, IssuerKey, claims.Issuer)
 			}
